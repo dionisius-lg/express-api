@@ -1,7 +1,5 @@
 # Express API
 
-[![NPM Version][npm-version-image]][npm-url]
-
 This application is built with [Express](https://expressjs.com) 4.x
 
 Before installing, download and install Node.js. Node.js 0.10 or higher is required.
