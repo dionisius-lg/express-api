@@ -1,10 +1,16 @@
 const express = require('express');
 const app = express();
-
 const config = require('./src/config')
 const router = require('./src/route')
 
-app.use(router)
+// parsing application/x-www-form-urlencoded
+app.use(express.json({limit: '25mb'}));
+app.use(express.urlencoded({limit: '25mb', extended: true }));
+
+// define all router
+app.use(router);
+
+// app.disable('x-powered-by');
 
 app.listen(config.app.port, (err) => {
     if (err) {

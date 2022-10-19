@@ -4,9 +4,14 @@ const fs = require('fs')
 const path = require('path')
 const scriptName = path.basename(__filename)
 const routePath = './src/route'
+const config = require('./../config')
+const responseHelper = require('./../helper/response')
 
 router.get('/', (req, res) => {
-    res.send({app: 'Express Api'})
+    res.send({
+        app: config.app.name,
+        description: config.app.desc
+    })
 })
 
 fs.readdirSync(routePath).forEach((file) => {
@@ -18,8 +23,9 @@ fs.readdirSync(routePath).forEach((file) => {
     }
 })
 
+// for non-existing route
 router.all('*', (req, res) => {
-    res.send({app: 'Not Found'})
+    responseHelper.sendNotFoundResource(res)
 })
 
 module.exports = router

@@ -5,4 +5,6 @@
 
 # misc
 package-lock.json
+
+# local environment
 .env
