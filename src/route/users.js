@@ -2,7 +2,9 @@ const router = require('express').Router()
 const bcrypt = require('bcrypt')
 const _ = require('lodash')
 const responseHelper = require('./../helper/response')
+const validationMiddleware = require('./../middleware/validation')
 const usersController = require('./../controller/users')
+const usersSchema = require('./../schema/users')
 
 router.get('/', async (req, res, next) => {
     const conditions = req.query
@@ -11,7 +13,7 @@ router.get('/', async (req, res, next) => {
     return responseHelper.sendSuccessData(res, result)
 })
 
-router.get('/:id', async (req, res, next) => {
+router.get('/:id', validationMiddleware(usersSchema.detail, 'params'), async (req, res, next) => {
     const conditions = { id: req.params.id }
     const result = await usersController.getDetail(conditions)
 
@@ -26,7 +28,7 @@ router.get('/:id', async (req, res, next) => {
     return responseHelper.sendSuccessData(res, result)
 })
 
-router.post('/', async (req, res, next) => {
+router.post('/', validationMiddleware(usersSchema.create, 'body'), async (req, res, next) => {
     let body = req.body
     let hashPassword = bcrypt.hashSync(body.username, 10)
     body.password = hashPassword
@@ -40,7 +42,8 @@ router.post('/', async (req, res, next) => {
     return responseHelper.sendSuccessData(res, result, 201)
 })
 
-router.put('/:id', async (req, res, next) => {
+
+router.put('/:id', validationMiddleware(usersSchema.update, 'body'), async (req, res, next) => {
     let conditions = { id: req.params.id }
     let body = req.body
 
@@ -60,7 +63,8 @@ router.put('/:id', async (req, res, next) => {
     return responseHelper.sendSuccessData(res, result)
 })
 
-router.delete('/:id', async (req, res, next) => {
+
+router.delete('/:id', validationMiddleware(usersSchema.detail, 'body'), async (req, res, next) => {
     let conditions = { id: req.params.id }
 
     const result = await usersController.deleteData(conditions)
