@@ -7,7 +7,7 @@ const responseHelper = require('./../helper/response')
  * @param  {Object} schema - schema object screnario and message
  * @param  {string} property - request property. @example 'body', 'params'
  */
- const validation = (schema, property) => { 
+const validation = (schema, property) => { 
 	return (req, res, next) => {
         const validate = schema.validate(req[property], {
             abortEarly: false,

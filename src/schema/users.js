@@ -1,6 +1,6 @@
 const Joi = require('joi').extend(require('@joi/date'))
 
-const schemas = {
+const schema = {
     detail: Joi.object().keys({ 
         id: Joi.number().min(1).required()
     }),
@@ -128,4 +128,4 @@ const schemas = {
     }),
 } 
 
-module.exports = schemas
+module.exports = schema

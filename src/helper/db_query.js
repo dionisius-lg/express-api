@@ -92,9 +92,8 @@ exports.countData = ({ table = '', conditions = {}, conditionTypes = { 'like': [
             for (key in conditions) {
                 if (!_.isEmpty(conditionTypes)) {
                     if (_.indexOf(conditionTypes.date, key) >= 0) {
-                        const d = new Date()
-                        const dateVal = (_.toNumber(conditions[key]) > 0) ? dateFormat(conditions[key] * 1000, 'yyyy-mm-dd') : dateFormat(d, 'yyyy-mm-dd')
-                        setCond.push(`DATE(${table}.${key}) = ${dbConn.escape(dateVal)}`)
+                        let dateVal = (_.toNumber(conditions[key]) > 0) ? moment(conditions[key] * 1000) : moment(new Date())
+                        setCond.push(`DATE(${table}.${key}) = ${dbConn.escape(val.format('YYYY-MM-DD'))}`)
                     } else if (_.indexOf(conditionTypes.like, key) >= 0) {
                         let keyLike = `%${conditions[key]}%`
                         setCond.push(`${table}.${key} LIKE ${dbConn.escape(keyLike)}`)
@@ -315,9 +314,8 @@ exports.getAll = ({ table = '', conditions = {}, conditionTypes = { 'like': [], 
             for (key in conditions) {
                 if (!_.isEmpty(conditionTypes)) {
                     if (_.indexOf(conditionTypes.date, key) >= 0) {
-                        const d = new Date()
-                        const dateVal = (_.toNumber(conditions[key]) > 0) ? dateFormat(conditions[key] * 1000, 'yyyy-mm-dd') : dateFormat(d, 'yyyy-mm-dd')
-                        setCond.push(`DATE(${table}.${key}) = ${dbConn.escape(dateVal)}`)
+                        let dateVal = (_.toNumber(conditions[key]) > 0) ? moment(conditions[key] * 1000) : moment(new Date())
+                        setCond.push(`DATE(${table}.${key}) = ${dbConn.escape(val.format('YYYY-MM-DD'))}`)
                     } else if (_.indexOf(conditionTypes.like, key) >= 0) {
                         let keyLike = `%${conditions[key]}%`
                         setCond.push(`${table}.${key} LIKE ${dbConn.escape(keyLike)}`)
@@ -646,8 +644,7 @@ exports.insertData = ({ table = '', data = {}, attributeColumn = '', protectedCo
                 dataVal = _.trim(data[k])
 
                 if (_.indexOf(timeChar, _.toUpper(dataVal)) >= 0) {
-                    let d = new Date()
-                    dataVal = dateFormat(d, 'yyyy-mm-dd HH:MM:ss')
+                    dataVal = moment(new Date()).format('YYYY-MM-DD HH:mm:ss')
                 }
 
                 if (_.indexOf(nullChar, _.toUpper(dataVal)) >= 0) {
@@ -767,8 +764,7 @@ exports.insertManyData = ({ table = '', data = {}, protectedColumns = [], cacheK
                     dataVal = _.trim(data[key][k])
 
                     if (_.indexOf(timeChar, _.toUpper(dataVal)) >= 0) {
-                        let d = new Date()
-                        dataVal = dateFormat(d, 'yyyy-mm-dd HH:MM:ss')
+                        dataVal = moment(new Date()).format('YYYY-MM-DD HH:mm:ss')
                     }
 
                     if (_.indexOf(nullChar, _.toUpper(dataVal)) >= 0) {
@@ -875,8 +871,7 @@ exports.insertDuplicateUpdateData = ({ table = '', data = {}, protectedColumns =
                     dataVal = _.trim(data[key][k])
 
                     if (_.indexOf(timeChar, _.toUpper(dataVal)) >= 0) {
-                        let d = new Date()
-                        dataVal = dateFormat(d, 'yyyy-mm-dd HH:MM:ss')
+                        dataVal = moment(new Date()).format('YYYY-MM-DD HH:mm:ss')
                     }
 
                     if (_.indexOf(nullChar, _.toUpper(dataVal)) >= 0) {
@@ -977,8 +972,7 @@ exports.updateData = ({ table = '', data = {}, conditions = {}, attributeColumn 
                 
                 if (typeof data[key] !== undefined) {
                     if (_.indexOf(timeChar, _.toUpper(dataVal)) >= 0) {
-                        let d = new Date()
-                        dataVal = dateFormat(d, 'yyyy-mm-dd HH:MM:ss')
+                        dataVal = moment(new Date()).format('YYYY-MM-DD HH:mm:ss')
                     }
 
                     if (_.indexOf(nullChar, _.toUpper(dataVal)) >= 0) {
