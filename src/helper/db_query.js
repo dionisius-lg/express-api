@@ -33,131 +33,77 @@ exports.checkColumn = ({ db = config.db.name, table = '' }) => {
 }
 
 /**
- * Return table custom fields
- * @param  {string} table - Table's name
- * @returns {Promise.<string[]>} Array of object selected table's custom field name
- */
-exports.checkCustomField = ({table = '' }) => {
-    return new Promise((resolve, reject) => {
-        const query = `SELECT * FROM custom_fields WHERE is_active = 1 AND source_table = '${table}'`
-        dbConn.query(query, (err, results, fields) => {
-            if (err) {
-                // throw err
-                console.error(err)
-                return
-            }
-
-            const columns = results.map(function (c) {
-                //let fields = {}
-                return {'field_key': c.field_key, 'field_type_id': c.field_type_id}
-            })
-
-            resolve(columns)
-        })
-    })
-}
-
-/**
  * Return total data
  * @param  {string} table - Table's name
- * @param  {Object.<string, string|number>} conditions - Query conditions. @example {columnName: 'columnValue'}
- * @param  {Object.<string, string[]>} [conditionTypes={ 'like': [], 'date': [] }] - Condition option for certain table field. 'like' field will be treated with 'LIKE' condition. 'date' field will be treated with 'DATE()' function inside query condition
- * @param  {string[]} customConditions - custom query condition. @example ['tableA.columnTableA = "someValue"']
- * @param  {string} attributeColumn - custom attribute column name in selected table.
- * @param  {string[]} customFields - custom fields in selected table. @example ['customField1', 'customField2']
- * @param  {string[]} customDropdownFields - custom fields with dropdown type in selected table. @example ['customField1', 'customField2']
- * @param  {Object.<string>} join - JOIN query statement. @example {'JOIN tableB ON tableB.id = tableA.table_b_id'}
- * @param  {Object.<string>} groupBy - GROUP BY query statement. @example {'columnA'}
- * @param  {Object.<string>} having - HAVING query statement. groupBy param required. @example {'COUNT(columA) > 1'}
+ * @param  {Object} conditions - Query conditions. @example {columnName: 'columnValue'}
+ * @param  {Object} conditionTypes={ 'like': [], 'date': [] } - Condition option for certain table field. 'like' field will be treated with 'LIKE' condition. 'date' field will be treated with 'DATE()' function inside query condition
+ * @param  {Array} customConditions - custom query condition. @example ['tableA.columnTableA = "someValue"']
+ * @param  {Array} join - JOIN query statement. @example ['JOIN tableB ON tableB.id = tableA.table_b_id']
+ * @param  {Array} groupBy - GROUP BY query statement. @example ['columnA', 'columnB']
+ * @param  {Array} having - HAVING query statement. groupBy param required. @example ]'COUNT(columA) > 1']
  * @returns {Promise.<number|Object.<string, number|boolean>>} total data of given table and condition
  */
-exports.countData = ({ table = '', conditions = {}, conditionTypes = { 'like': [], 'date': [] }, customConditions = [], attributeColumn = '', customFields = {}, customDropdownFields = {}, customAttribute = {}, join = {}, groupBy = {}, having = {} }) => {
+exports.countData = ({ table = '', conditions = {}, conditionTypes = { 'like': [], 'date': [] }, customConditions = [], join = {}, groupBy = {}, having = {} }) => {
     return new Promise((resolve, reject) => {
         let res = {
             total_data: 0,
             data: false
         }
-        let setCond = []
-        let setCustomCond = []
-        let queryCond = ''
+
         let query = `SELECT COUNT(*) AS count FROM ${table}`
-        let queryCount = ''
 
         if (!_.isEmpty(join) && _.isArrayLikeObject(join)) {
             let joinQuery = _.join(join, ' ')
             query += ` ${joinQuery}`
         }
-        
-        if (!_.isEmpty(conditions)) {
-            for (key in conditions) {
-                if (!_.isEmpty(conditionTypes)) {
+
+        if (!_.isEmpty(conditions) && _.isPlainObject(conditions)) {
+            let clause = []
+
+            for (let key in conditions) {
+                let val = conditions[key]
+                let conditionKey = (!_.isEmpty(join) && _.isArrayLikeObject(join)) ? `${table}.${key}` : key
+
+                if (!_.isEmpty(conditionTypes) && _.isPlainObject(conditionTypes)) {
                     if (_.indexOf(conditionTypes.date, key) >= 0) {
-                        let dateVal = (_.toNumber(conditions[key]) > 0) ? moment(conditions[key] * 1000) : moment(new Date())
-                        setCond.push(`DATE(${table}.${key}) = ${dbConn.escape(val.format('YYYY-MM-DD'))}`)
+                        val = (_.toNumber(val) > 0) ? moment(val * 1000) : moment(new Date())
+                        clause.push(`DATE(${conditionKey}) = ${dbConn.escape(val.format('YYYY-MM-DD'))}`)
                     } else if (_.indexOf(conditionTypes.like, key) >= 0) {
-                        let keyLike = `%${conditions[key]}%`
-                        setCond.push(`${table}.${key} LIKE ${dbConn.escape(keyLike)}`)
+                        val = `%${val}%`
+                        clause.push(`${conditionKey} LIKE ${dbConn.escape(val)}`)
                     } else {
-                        let is_array = conditions[key].constructor === Array
-                        
-                        if (is_array) {
-                            setCond.push(`${table}.${key} IN (${dbConn.escape(conditions[key])})`)
+                        if (val.constructor === Array) {
+                            clause.push(`${conditionKey} IN (${dbConn.escape(val)})`)
                         } else {
-                            setCond.push(`${table}.${key} = ${dbConn.escape(conditions[key])}`)
+                            clause.push(`${conditionKey} = ${dbConn.escape(val)}`)
                         }
                     }
                 } else {
-                    let is_array = conditions[key].constructor === Array
-                        
-                    if (is_array) {
-                        setCond.push(`${table}.${key} IN (${dbConn.escape(conditions[key])})`)
+                    if (val.constructor === Array) {
+                        clause.push(`${conditionKey} IN (${dbConn.escape(val)})`)
                     } else {
-                        setCond.push(`${table}.${key} = ${dbConn.escape(conditions[key])}`)
+                        clause.push(`${conditionKey} = ${dbConn.escape(val)}`)
                     }
                 }
             }
-            
-            queryCond = _.join(setCond, ' AND ')
-            query += ` WHERE ${queryCond}`
-        }
-        
-        if (!_.isEmpty(attributeColumn)) {
-            // for custom attributes
-            let queryLine
 
-            if (!_.isEmpty(customAttribute)) {
-                for (key in customAttribute) {
-                    if (_.indexOf(customDropdownFields, key) >= 0) {
-                        queryLine = `JSON_EXTRACT(${table}.${attributeColumn}, '$.${key}.id') = ${dbConn.escape(customAttribute[key])}`
-                    } else {
-                        queryLine = `JSON_EXTRACT(${table}.${attributeColumn}, '$.${key}') = ${dbConn.escape(customAttribute[key])}`
-                    }
-
-                    setCustomCond.push(queryLine)
-                }
-
-                queryCond = _.join(setCustomCond, ' AND ')
-                
-                if (!_.isEmpty(conditions)) {
-                    query += ` AND ${queryCond}`      
-                } else {
-                    query += ` WHERE ${queryCond}`
-                }
-            }
+            let conditionQuery = _.join(clause, ' AND ')
+            query += ` WHERE ${conditionQuery}`
         }
 
         if (!_.isEmpty(customConditions) && _.isArrayLikeObject(customConditions)) {
-            queryCond = ' WHERE ' + _.join(customConditions, ' AND ')
+            let conditionQuery = _.join(customConditions, ' AND ')
 
-            if (!_.isEmpty(conditions)) {
-                queryCond = ' AND ' + _.join(customConditions, ' AND ')
-            }
-
-            query += `${queryCond}`
+            query += (!_.isEmpty(conditions) && _.isPlainObject(conditions)) ? ' AND ' : ' WHERE '
+            query += conditionQuery
         }
 
         if (!_.isEmpty(groupBy) && _.isArrayLikeObject(groupBy)) {
-            let columnGroup = _.join(groupBy, ', ')
+            let prefixGroup = groupBy.map((grp) => {
+                return (_.indexOf(grp, '.') >= 0) ? grp : `${table}.${grp}`
+            })
+
+            let columnGroup = _.join(prefixGroup, ', ')
             query += ` GROUP BY ${columnGroup}`
 
             if (!_.isEmpty(having) && _.isArrayLikeObject(having)) {
@@ -168,7 +114,7 @@ exports.countData = ({ table = '', conditions = {}, conditionTypes = { 'like': [
             queryCount = `SELECT COUNT(*) AS count FROM (${query}) AS count`
             query = queryCount
         }
-        
+
         dbConn.query(query, (err, results, fields) => {
             if (err) {
                 // throw err
@@ -185,83 +131,53 @@ exports.countData = ({ table = '', conditions = {}, conditionTypes = { 'like': [
 
 /**
  * SELECT query
- * @param  {string} table - Table's name
- * @param  {Object.<string, string|number>} conditions - Query conditions. @example {columnName: 'columnValue'}
- * @param  {Object.<string, string[]>} [conditionTypes={ 'like': [], 'date': [] }]  - Condition option for certain table field. 'like' field will be treated with 'LIKE' condition. 'date' field will be treated with 'DATE()' function inside query condition
- * @param  {string[]} customConditions - custom query condition. @example ['tableA.columnTableA = "someValue"']
- * @param  {Object.<string>} columnSelect - custom column to select. @example {'columnA', 'columnB'}
- * @param  {Object.<string>} columnDeselect - custom column to deselect. @example {'columnA', 'columnB'}
- * @param  {string[]} customColumns - custom column from join table. @example ['tableB.columnTableB AS newUniqueColumn']
- * @param  {Object.<string>} join - JOIN query statement. @example {'JOIN tableB ON tableB.id = tableA.table_b_id'}
- * @param  {Object.<string>} customOrders - custom ORDER BY query statement. @example {'CASE tableA.ticket_status_id WHEN 1 THEN tableA.columnA ELSE tableA.columnB END ASC, tableA.columnA'}
- * @param  {string} attributeColumn - custom attribute column name in selected table.
- * @param  {Object.<string>} groupBy - GROUP BY query statement. @example {'columnA'}
- * @param  {Object.<string>} having - HAVING query statement. groupBy param required. @example {'COUNT(columA) > 1'}
- * @param  {string} cacheKey - set key for Redis. if empty, table name will be used as the key
+ * @param  {String} table - Table's name
+ * @param  {Object} conditions - Query conditions. @example {columnName: 'columnValue'}
+ * @param  {Object} conditionTypes={ 'like': [], 'date': [] }  - Condition option for certain table field. 'like' field will be treated with 'LIKE' condition. 'date' field will be treated with 'DATE()' function inside query condition
+ * @param  {Array} customConditions - custom query condition. @example ['tableA.columnTableA = "someValue"']
+ * @param  {Array} columnSelect - custom column to select. @example ['columnA', 'columnB']
+ * @param  {Array} columnDeselect - custom column to deselect. @example ['columnA', 'columnB']
+ * @param  {Array} customColumns - custom column from join table. @example ['tableB.columnTableB AS newUniqueColumn']
+ * @param  {Array} join - JOIN query statement. @example ['JOIN tableB ON tableB.id = tableA.table_b_id']
+ * @param  {Array} groupBy - GROUP BY query statement. @example ['columnA', 'columnB']
+ * @param  {Array} having - HAVING query statement. groupBy param required. @example ['COUNT(columA) > 1']
+ * @param  {Array} customOrders - custom ORDER BY query statement. @example ['CASE tableA.ticket_status_id WHEN 1 THEN tableA.columnA ELSE tableA.columnB END ASC, tableA.columnA']
  * @returns {Promise.<Object.<string, string|number|boolean|Object>>} - data result
  */
-exports.getAll = ({ table = '', conditions = {}, conditionTypes = { 'like': [], 'date': [] }, customConditions = [], columnSelect = {}, columnDeselect = {}, customColumns = [], attributeColumn = '', join = {}, groupBy = {}, customOrders = {}, having = {}, cacheKey = '' }) => {
+exports.getAll = ({ table = '', conditions = {}, conditionTypes = { 'like': [], 'date': [] }, customConditions = [], columnSelect = [], columnDeselect = [], customColumns = [], join = [], groupBy = [], having = [], customOrders = [] }) => {
     return new Promise(async (resolve, reject) => {
         let res = {
             total_data: 0,
             data: false
         }
-        let columns = await this.checkColumn({ table })
-        const masterColumns = columns
-        let column = ''
-        const customAttribute = { ... conditions }
-        const sortData = ['ASC', 'DESC']
+
+        if (_.isEmpty(table)) {
+            return resolve(res)
+        }
+
+        const allowedSort = ['ASC', 'DESC']
+        const masterColumns = await this.checkColumn({ table })
+
+        let query = ''
+        let columns = masterColumns
         let order = (!_.isEmpty(conditions.order)) ? conditions.order : columns[0]
-        order = (_.indexOf(columns, order) >= 0) ? order : columns[0]
-        
-        if (conditions.order == false) {
-            order = false;
-        }
-
-        const sort = (_.indexOf(sortData, _.toUpper(conditions.sort)) >= 0) ? _.toUpper(conditions.sort) : 'ASC'
-        let limit = (conditions.limit > 0) ? conditions.limit : 20
-        
-        if (conditions.limit == false) {
-            limit = false;
-        }
-        
-        let page = (conditions.page > 0) ? conditions.page : 1
-        let setCond = []
-        let queryCond = ''
-        let getCustomFields = []
-        let customFields = []
-        let customDropdownFields = []
-
-        if (!_.isEmpty(attributeColumn)) {
-            getCustomFields = await this.checkCustomField({ table })
-            customFields = _.map(getCustomFields, 'field_key')
-            const getDropdownColumn = _.filter(getCustomFields, { 'field_type_id': 5 })
-            customDropdownFields = _.map(getDropdownColumn, 'field_key')
-            requestHelper.filterColumn(customAttribute, customFields)
-        }
+        let sort = (_.indexOf(allowedSort, _.toUpper(conditions.sort)) >= 0) ? _.toUpper(conditions.sort) : allowedSort[0]
+        let page = (!_.isNaN(conditions.page) && conditions.page > 0) ? conditions.page : 1
+        let limit = (!_.isNaN(conditions.limit) && conditions.limit > 0) ? conditions.limit : 20
 
         if (!_.isEmpty(columnSelect) && _.isArrayLikeObject(columnSelect)) {
             // filter data from all table columns, only keep selected columns
-            let validColumn = _.intersection(columnSelect, columns)
-            columns = validColumn
+            columns = _.intersection(columnSelect, columns)
         }
 
         if (!_.isEmpty(columnDeselect) && _.isArrayLikeObject(columnDeselect)) {
-            if (_.indexOf(columnDeselect, '*') >= 0) {
-                // filter data, exclude all columns
-                // let selectedColumn = _.difference(columns, deselectedColumn)
-                columns = []
-            } else {
-                // filter data, get column to exclude from valid selected columns or table columns
-                let deselectedColumn = _.intersection(columnDeselect, columns)
-                // filter data, exclude deselected columns
-                let selectedColumn = _.difference(columns, deselectedColumn)
-                columns = selectedColumn
-            }
+            // filter data, get column to exclude from valid selected columns or table columns
+            let deselectedColumn = _.intersection(columnDeselect, columns)
+            // filter data, exclude deselected columns
+            columns = _.difference(columns, deselectedColumn)
         }
 
         if (!_.isEmpty(join) && _.isArrayLikeObject(join)) {
-            // give prefix table to table columns
             let prefixColumn = columns.map(function (col) {
                 return `${table}.${col}`
             })
@@ -269,38 +185,16 @@ exports.getAll = ({ table = '', conditions = {}, conditionTypes = { 'like': [], 
             columns = prefixColumn
         }
 
-        column = _.join(columns, ', ')
-        
-        if (!_.isEmpty(customFields)) {
-            let customField = ''
-            let setCustomField = []
-
-            for (key in customFields) {
-                if (_.indexOf(customDropdownFields, customFields[key]) >= 0) {
-                    setCustomField.push(`CONCAT_WS('||', JSON_UNQUOTE(JSON_EXTRACT(${table}.${attributeColumn}, '$.${customFields[key]}.id')), JSON_UNQUOTE(JSON_EXTRACT(${table}.${attributeColumn}, '$.${customFields[key]}.value'))) AS ${customFields[key]}`)
-                } else {
-                    setCustomField.push(`JSON_UNQUOTE(JSON_EXTRACT(${table}.${attributeColumn}, '$.${customFields[key]}')) AS ${customFields[key]}`)
-                }
-            }
-
-            customField = _.join(setCustomField, ', ')
-
-            if (!_.isEmpty(column)) {
-                column += `, ${customField}`    
-            } else {
-                column += `${customField}`
-            }
-        }
-
         if (!_.isEmpty(customColumns) && _.isArrayLikeObject(customColumns)) {
-            if (_.isEmpty(columns)) {
-                column += _.join(customColumns, ', ')
-            } else {
-                column += ', ' + _.join(customColumns, ', ')
-            }
+            // filter data, exclude customColumn if aleady exist in columns
+            columns = _.union(columns, customColumns)
         }
 
-        let query = `SELECT ${column} FROM ${table}`
+        let columnQuery = _.join(columns, ', ')
+
+        if (table) {
+            query = `SELECT ${columnQuery} FROM ${table}`
+        }
 
         if (!_.isEmpty(join) && _.isArrayLikeObject(join)) {
             let joinQuery = _.join(join, ' ')
@@ -309,69 +203,54 @@ exports.getAll = ({ table = '', conditions = {}, conditionTypes = { 'like': [], 
 
         // remove invalid column from conditions
         requestHelper.filterColumn(conditions, masterColumns)
-        
-        if (!_.isEmpty(conditions)) {
-            for (key in conditions) {
-                if (!_.isEmpty(conditionTypes)) {
-                    if (_.indexOf(conditionTypes.date, key) >= 0) {
-                        let dateVal = (_.toNumber(conditions[key]) > 0) ? moment(conditions[key] * 1000) : moment(new Date())
-                        setCond.push(`DATE(${table}.${key}) = ${dbConn.escape(val.format('YYYY-MM-DD'))}`)
-                    } else if (_.indexOf(conditionTypes.like, key) >= 0) {
-                        let keyLike = `%${conditions[key]}%`
-                        setCond.push(`${table}.${key} LIKE ${dbConn.escape(keyLike)}`)
-                    } else {                        
-                        let is_array = conditions[key].constructor === Array
 
-                        if (is_array) {
-                            setCond.push(`${table}.${key} IN (${dbConn.escape(conditions[key])})`)
+        if (!_.isEmpty(conditions) && _.isPlainObject(conditions)) {
+            let clause = []
+
+            for (let key in conditions) {
+                let val = conditions[key]
+                let conditionKey = (!_.isEmpty(join) && _.isArrayLikeObject(join)) ? `${table}.${key}` : key
+
+                if (!_.isEmpty(conditionTypes) && _.isPlainObject(conditionTypes)) {
+                    if (_.indexOf(conditionTypes.date, key) >= 0) {
+                        val = (_.toNumber(val) > 0) ? moment(val * 1000) : moment(new Date())
+                        clause.push(`DATE(${conditionKey}) = ${dbConn.escape(val.format('YYYY-MM-DD'))}`)
+                    } else if (_.indexOf(conditionTypes.like, key) >= 0) {
+                        val = `%${val}%`
+                        clause.push(`${conditionKey} LIKE ${dbConn.escape(val)}`)
+                    } else {
+                        if (val.constructor === Array) {
+                            clause.push(`${conditionKey} IN (${dbConn.escape(val)})`)
                         } else {
-                            setCond.push(`${table}.${key} = ${dbConn.escape(conditions[key])}`)
+                            clause.push(`${conditionKey} = ${dbConn.escape(val)}`)
                         }
                     }
                 } else {
-                    let is_array = conditions[key].constructor === Array
-                        
-                    if (is_array) {
-                        setCond.push(`${table}.${key} IN (${dbConn.escape(conditions[key])})`)
+                    if (val.constructor === Array) {
+                        clause.push(`${conditionKey} IN (${dbConn.escape(val)})`)
                     } else {
-                        setCond.push(`${table}.${key} = ${dbConn.escape(conditions[key])}`)
+                        clause.push(`${conditionKey} = ${dbConn.escape(val)}`)
                     }
                 }
             }
+
+            let conditionQuery = _.join(clause, ' AND ')
+            query += ` WHERE ${conditionQuery}`
         }
-
-        if (!_.isEmpty(attributeColumn)) {
-            // for custom attributes
-            let queryLine
-
-            for (key in customAttribute) {
-                if (customFields.indexOf(key) >= 0) {
-                    if (_.indexOf(customDropdownFields, key) >= 0) {
-                        queryLine = `JSON_EXTRACT(${table}.${attributeColumn}, '$.${key}.id') = ${dbConn.escape(customAttribute[key])}`
-                    } else {
-                        queryLine = `JSON_EXTRACT(${table}.${attributeColumn}, '$.${key}') = ${dbConn.escape(customAttribute[key])}`
-                    }
-
-                    setCond.push(queryLine)
-                }
-            }
-        }
-
-        queryCond = _.join(setCond, ' AND ')
-        query += (!_.isEmpty(queryCond)) ? ` WHERE ${queryCond}` : ''
 
         if (!_.isEmpty(customConditions) && _.isArrayLikeObject(customConditions)) {
-            queryCond = ' WHERE ' + _.join(customConditions, ' AND ')
+            let conditionQuery = _.join(customConditions, ' AND ')
 
-            if (!_.isEmpty(conditions)) {
-                queryCond = ' AND ' + _.join(customConditions, ' AND ')
-            }
-
-            query += `${queryCond}`
+            query += (!_.isEmpty(conditions) && _.isPlainObject(conditions)) ? ' AND ' : ' WHERE '
+            query += conditionQuery
         }
 
         if (!_.isEmpty(groupBy) && _.isArrayLikeObject(groupBy)) {
-            let columnGroup = _.join(groupBy, ', ')
+            let prefixGroup = groupBy.map((grp) => {
+                return (_.indexOf(grp, '.') >= 0) ? grp : `${table}.${grp}`
+            })
+
+            let columnGroup = _.join(prefixGroup, ', ')
             query += ` GROUP BY ${columnGroup}`
 
             if (!_.isEmpty(having) && _.isArrayLikeObject(having)) {
@@ -380,30 +259,22 @@ exports.getAll = ({ table = '', conditions = {}, conditionTypes = { 'like': [], 
             }
         }
 
-        if (!_.isEmpty(customOrders) && _.isArrayLikeObject(customOrders)) {
-            query += ` ORDER BY ${customOrders}`
-        } else {
-            if (order !== undefined && !_.isEmpty(order)) {
-                let orderColumn = order
-
-                if (!_.isEmpty(join) && _.isArrayLikeObject(join)) {
-                    orderColumn = `${table}.${order}`
-                }
-                query += ` ORDER BY ${orderColumn} ${sort}`
-            }
+        if (!_.isEmpty(join) && _.isArrayLikeObject(join)) {
+            order = `${table}.${order}`
         }
 
-        if (limit > 0) {
-            const offset = (limit * page) - limit
-
-            if (_.isInteger(offset) && offset >= 0) {
-                query += ` LIMIT ${limit} OFFSET ${offset}`
-            } else {
-                query += ` LIMIT ${limit}`
-            }
+        if (_.indexOf(columns, order) >= 0) {
+            query += ` ORDER BY ${order} ${sort}`
         }
-        
-        let countData = await this.countData({ table, conditions, conditionTypes, customConditions, customAttribute, customFields, customDropdownFields, attributeColumn, join, groupBy, having })
+
+        query += ` LIMIT ${limit}`
+        let offset = (limit * page) - limit
+
+        if (_.isInteger(offset) && offset >= 0) {
+            query += ` OFFSET ${offset}`
+        }
+
+        let countData = await this.countData({ table, conditions, conditionTypes, customConditions, join, groupBy, having })
 
         dbConn.query(query, (err, results, fields) => {
             if (err) {
@@ -426,52 +297,41 @@ exports.getAll = ({ table = '', conditions = {}, conditionTypes = { 'like': [], 
 
 /**
  * SELECT query for detail specific condition
- * @param  {string} table - Table's name
- * @param  {Object.<string, string|number>} conditions - Query conditions. @example {columnName: 'columnValue'}
- * @param  {string[]} customConditions - custom query condition. @example ['tableA.columnTableA = "someValue"']
- * @param  {Object.<string>} columnSelect - custom column to select. @example {'columnA', 'columnB'}
- * @param  {Object.<string>} columnDeselect - custom column to deselect. @example {'columnA', 'columnB'}
- * @param  {string[]} customColumns - custom column from join table. @example ['tableB.columnTableB AS newUniqueColumn']
- * @param  {string} attributeColumn - custom attribute column name in selected table.
- * @param  {Object.<string>} join - JOIN query statement. @example {'JOIN tableB ON tableB.id = tableA.table_b_id'}
- * @param  {string} cacheKey - set key for Redis. if empty, table name will be used as the key
+ * @param  {String} table - Table's name
+ * @param  {Object} conditions - Query conditions. @example {columnName: 'columnValue'}
+ * @param  {Array} customConditions - custom query condition. @example ['tableA.columnTableA = "someValue"']
+ * @param  {Array} columnSelect - custom column to select. @example ['columnA', 'columnB']
+ * @param  {Array} columnDeselect - custom column to deselect. @example ['columnA', 'columnB']
+ * @param  {Array} customColumns - custom column from join table. @example ['tableB.columnTableB AS newUniqueColumn']
+ * @param  {Array} join - JOIN query statement. @example ['JOIN tableB ON tableB.id = tableA.table_b_id']
  * @returns {Promise.<Object.<string, string|number|boolean|Object>>} - data result
  */
-exports.getDetail = ({ table = '', conditions = {}, customConditions = [], columnSelect = [], columnDeselect = [], customColumns = [], attributeColumn = '', join = [], cacheKey = '' }) => {
+exports.getDetail = ({ table = '', conditions = {}, customConditions = [], columnSelect = [], columnDeselect = [], customColumns = [], join = [] }) => {
     return new Promise(async (resolve, reject) => {
         let res = {
             total_data: 0,
             data: false
         }
-        let columns = await this.checkColumn({ table })
-        let column = ''
-        const customAttribute = { ... conditions }
-        let setCond = []
-        let queryCond = ''
-        let getCustomFields = []
-        let customFields = []
-        let customDropdownFields = []
 
-        if (!_.isEmpty(attributeColumn)) {
-            getCustomFields = await this.checkCustomField({ table })
-            customFields = _.map(getCustomFields, 'field_key')
-            const getDropdownColumn = _.filter(getCustomFields, { 'field_type_id': 5 })
-            customDropdownFields = _.map(getDropdownColumn, 'field_key')
-            requestHelper.filterColumn(customAttribute, customFields)
+        if (_.isEmpty(table)) {
+            return resolve(res)
         }
-        
+
+        const masterColumns = await this.checkColumn({ table })
+
+        let query = 'SELECT'
+        let columns = masterColumns
+
         if (!_.isEmpty(columnSelect) && _.isArrayLikeObject(columnSelect)) {
             // filter data from all table columns, only keep selected columns
-            let validColumn = _.intersection(columnSelect, columns)
-            columns = validColumn
+            columns = _.intersection(columnSelect, columns)
         }
 
         if (!_.isEmpty(columnDeselect) && _.isArrayLikeObject(columnDeselect)) {
             // filter data, get column to exclude from valid selected columns or table columns
             let deselectedColumn = _.intersection(columnDeselect, columns)
             // filter data, exclude deselected columns
-            let selectedColumn = _.difference(columns, deselectedColumn)
-            columns = selectedColumn
+            columns = _.difference(columns, deselectedColumn)
         }
 
         if (!_.isEmpty(join) && _.isArrayLikeObject(join)) {
@@ -482,40 +342,13 @@ exports.getDetail = ({ table = '', conditions = {}, customConditions = [], colum
             columns = prefixColumn
         }
 
-        column = _.join(columns, ', ')
-        
-        if (!_.isEmpty(customFields)) {
-            let customField = ''
-            let setCustomField = []
-            
-            for (key in customFields) {
-                if (_.indexOf(customDropdownFields, customFields[key]) >= 0) {
-                    setCustomField.push(`CONCAT_WS('||', JSON_UNQUOTE(JSON_EXTRACT(${table}.${attributeColumn}, '$.${customFields[key]}.id')), JSON_UNQUOTE(JSON_EXTRACT(${table}.${attributeColumn}, '$.${customFields[key]}.value'))) AS ${customFields[key]}`)
-                } else {
-                    setCustomField.push(`JSON_UNQUOTE(JSON_EXTRACT(${table}.${attributeColumn}, '$.${customFields[key]}')) AS ${customFields[key]}`)
-                }
-            }
-
-            customField = _.join(setCustomField, ', ')
-
-            if (!_.isEmpty(column)) {
-                column += `, ${customField}`    
-            } else {
-                column += `${customField}`
-            }
-        }
-
         if (!_.isEmpty(customColumns) && _.isArrayLikeObject(customColumns)) {
-            let append = ''
-
-            if (column) {
-                append = ', '
-            }
-
-            column += append + _.join(customColumns, ', ')
+            // push value data if doesn't exist in columns
+            columns = _.union(columns, customColumns)
         }
 
-        let query = `SELECT ${column}`
+        let columnQuery = _.join(columns, ', ')
+        query += ` ${columnQuery}`
 
         if (table) {
             query += ` FROM ${table}`
@@ -526,30 +359,31 @@ exports.getDetail = ({ table = '', conditions = {}, customConditions = [], colum
             query += ` ${joinQuery}`
         }
 
-        if (!_.isEmpty(conditions)) {
-            for (key in conditions) {
+        // remove invalid column from conditions
+        requestHelper.filterColumn(conditions, masterColumns)
+
+        if (!_.isEmpty(conditions) && _.isPlainObject(conditions)) {
+            let clause = []
+
+            for (let key in conditions) {
                 let keyCondition = key
 
                 if (!_.isEmpty(join) && _.isArrayLikeObject(join)) {
                     keyCondition = `${table}.${key}`
                 }
 
-                setCond.push(`${keyCondition} = ${dbConn.escape(conditions[key])}`)
+                clause.push(`${keyCondition} = ${dbConn.escape(conditions[key])}`)
             }
 
-            queryCond = _.join(setCond, ' AND ')
-
-            query += ` WHERE ${queryCond}`
+            let conditionQuery = _.join(clause, ' AND ')
+            query += ` WHERE ${conditionQuery}`
         }
 
         if (!_.isEmpty(customConditions) && _.isArrayLikeObject(customConditions)) {
-            queryCond = ' WHERE ' + _.join(customConditions, ' AND ')
+            let conditionQuery = _.join(customConditions, ' AND ')
 
-            if (!_.isEmpty(conditions)) {
-                queryCond = ' AND ' + _.join(customConditions, ' AND ')
-            }
-
-            query += `${queryCond}`
+            query += (!_.isEmpty(conditions) && _.isPlainObject(conditions)) ? ' AND' : ' WHERE'
+            query += ` ${conditionQuery}`
         }
 
         if (table) {
@@ -562,7 +396,7 @@ exports.getDetail = ({ table = '', conditions = {}, customConditions = [], colum
                 console.error(err)
                 return resolve(res)
             }
-            
+
             if (!_.isEmpty(results)) {
                 res = {
                     total_data: 1,
@@ -581,106 +415,70 @@ exports.getDetail = ({ table = '', conditions = {}, customConditions = [], colum
  * INSERT query
  * @param  {string} table - Table's name
  * @param  {Object.<string, string|number>} data - Data to insert. @example {columnName: 'newValue'}
- * @param  {string} attributeColumn - custom attribute column name in selected table
- * @param  {string[]} protectedColumns - Columns to be ignore for insert statement. @example ['columnA', 'columnB']
- * @param  {string[]} cacheKeys - Redis key to be remove. @example {'keyTableA', 'keyTableB'}
+ * @param  {Array} protectedColumns - Columns to be ignore for insert statement. @example ['columnA', 'columnB']
  * @returns {Promise.<Object.<string, number|boolean|Object>>} - data result
  */
-exports.insertData = ({ table = '', data = {}, attributeColumn = '', protectedColumns = [], cacheKeys = [] }) => {
+exports.insertData = ({ table = '', data = {}, attributeColumn = '', protectedColumns = [] }) => {
     return new Promise(async (resolve, reject) => {
         let res = {
             total_data: 0,
             data: false
         }
+
+        if (_.isEmpty(table)) {
+            return resolve(res)
+        }
+
+        const columns = await this.checkColumn({ table })
+
         let timeChar = ['CURRENT_TIMESTAMP()', 'NOW()']
         let nullChar = ['NULL', '']
-        const dataCustom = { ... data }
-        const columns = await this.checkColumn({ table })
+
         // remove invalid column from data
         requestHelper.filterColumn(data, columns)
+
         // remove invalid data
         requestHelper.filterData(data)
 
-        let getCustomFields
-        let customDropdownFields
-        let customFields = []
-        
-        if (!_.isEmpty(attributeColumn)) {
-            getCustomFields = await this.checkCustomField({ table })
-            customFields = _.map(getCustomFields, 'field_key')
-            const getDropdownColumn = _.filter(getCustomFields, { 'field_type_id': 5 })
-            customDropdownFields = _.map(getDropdownColumn, 'field_key')
-            requestHelper.filterColumn(dataCustom, customFields)
-        }
-
-        if (_.isEmpty(data) && _.isEmpty(dataCustom)) {
-            // reject('Insert query require some data')
+        if (_.isEmpty(data) || !_.isPlainObject(data)) {
             return resolve(res)
         }
-        
+
         let keys = Object.keys(data)
+
         // check protected columns on submitted data
         let forbiddenColumns = _.intersection(protectedColumns, keys)
 
         if (!_.isEmpty(forbiddenColumns)) {
             return resolve(res)
         }
-        
-        delete keys[attributeColumn]
-        
-        if (!_.isEmpty(dataCustom) && !_.isEmpty(attributeColumn)) {
-            keys.push(attributeColumn)
-        }
-        
+
         let column = _.join(keys, ', ')
-        
         let query = `INSERT INTO ${table} (${column}) VALUES ?`
         let values = []
-        let dataCustomField = {}
-        let tempVal = Object.keys(data).map(k => {
-            let dataVal = ''
 
-            if (typeof data[k] !== undefined) {
-                dataVal = _.trim(data[k])
+        let tempVal = Object.keys(data).map(key => {
+            let val = data[key]
 
-                if (_.indexOf(timeChar, _.toUpper(dataVal)) >= 0) {
-                    dataVal = moment(new Date()).format('YYYY-MM-DD HH:mm:ss')
+            if (typeof val !== undefined) {
+                val = _.trim(val)
+
+                if (_.indexOf(timeChar, _.toUpper(val)) >= 0) {
+                    val = moment(new Date()).format('YYYY-MM-DD HH:mm:ss')
                 }
 
-                if (_.indexOf(nullChar, _.toUpper(dataVal)) >= 0) {
-                    dataVal = null
+                if (_.indexOf(nullChar, _.toUpper(val)) >= 0) {
+                    val = null
                 }
             } else {
-                dataVal = null
+                val = null
             }
 
-            return dataVal
+            return val
         })
-        
-        for (key in dataCustom) {
-            if (customFields.indexOf(key) >= 0) {
-                if (customDropdownFields.indexOf(key) >= 0) {
-                    let dropdownData = dataCustom[key].split('||')
-                    let dropdownId = dropdownData[0] || ''
-                    let dropdownValue = dropdownData[1] || ''
 
-                    if ((!isNaN(dropdownId) || _.isNumber(dropdownId)) && dropdownId > 0 && !_.isEmpty(dropdownValue)) {
-                        dataCustomField[key] = {id: dropdownId, value: dropdownValue}
-                    }
-                } else {
-                    dataCustomField[key] = dataCustom[key]
-                }
-            }
-        }
-        
-        let jsonDataCustom = JSON.stringify(dataCustomField);
-
-        if (!_.isEmpty(dataCustomField)) {
-            tempVal.push(jsonDataCustom)
-        }
-        
         values.push(tempVal)
-        
+
         dbConn.query(query, [values], (err, results, fields) => {
             if (err) {
                 // throw err
@@ -702,11 +500,10 @@ exports.insertData = ({ table = '', data = {}, attributeColumn = '', protectedCo
  * Multiple INSERT query.
  * @param  {string} table - Table's name
  * @param  {Array.<Object>} data - Data to insert. @example [{columnName: 'newValueA'}, {columnName: 'newValueB'}]
- * @param  {string[]} protectedColumns - Columns to be ignore for insert statement. @example ['columnA', 'columnB']
- * @param  {string[]} cacheKeys - Redis key to be remove. @example {'keyTableA', 'keyTableB'}
+ * @param  {Array} protectedColumns - Columns to be ignore for insert statement. @example ['columnA', 'columnB']
  * @returns {Promise.<Object.<string, number|boolean|Object>>} - data result
  */
-exports.insertManyData = ({ table = '', data = {}, protectedColumns = [], cacheKeys = [] }) => {
+exports.insertManyData = ({ table = '', data = {}, protectedColumns = [] }) => {
     return new Promise(async (resolve, reject) => {
         let res = {
             total_data: 0,
@@ -751,7 +548,7 @@ exports.insertManyData = ({ table = '', data = {}, protectedColumns = [], cacheK
         let values = []
         let tempVal = []
 
-        for (key in data) {
+        for (let key in data) {
             // if 'key' and 'data order' on each object not the same
             if (!_.isEqual(keys, Object.keys(data[key]))) {
                 return resolve(res)
@@ -801,11 +598,10 @@ exports.insertManyData = ({ table = '', data = {}, protectedColumns = [], cacheK
  * Multiple INSERT query with ON DUPLICATE KEY UPDATE condition
  * @param  {string} table - Table's name
  * @param  {Array.<Object>} data - Data to insert. @example [{columnName: 'newValueA'}, {columnName: 'newValueB'}]
- * @param  {string[]} protectedColumns - Columns to be ignore for insert statement. @example ['columnA', 'columnB']
- * @param  {string[]} cacheKeys - Redis key to be remove. @example {'keyTableA', 'keyTableB'}
+ * @param  {Array} protectedColumns - Columns to be ignore for insert statement. @example ['columnA', 'columnB']
  * @returns {Promise.<Object.<string, number|boolean|Object>>} - data result
  */
-exports.insertDuplicateUpdateData = ({ table = '', data = {}, protectedColumns = [], cacheKeys = [] }) => {
+exports.insertDuplicateUpdateData = ({ table = '', data = {}, protectedColumns = [] }) => {
     return new Promise(async (resolve, reject) => {
         let res = {
             total_data: 0,
@@ -858,7 +654,7 @@ exports.insertDuplicateUpdateData = ({ table = '', data = {}, protectedColumns =
         let values = []
         let tempVal = []
 
-        for (key in data) {
+        for (let key in data) {
             // if 'key' and 'data order' on each object not the same
             if (!_.isEqual(keys, Object.keys(data[key]))) {
                 return resolve(res)
@@ -907,142 +703,86 @@ exports.insertDuplicateUpdateData = ({ table = '', data = {}, protectedColumns =
 /**
  * UPDATE query
  * @param  {string} table - Table's name
- * @param  {Object.<string, string|number>} data - Data to update. @example {columnName: 'newValue'}
- * @param  {Object.<string, string|number>} conditions - Query conditions
- * @param  {string} attributeColumn - custom attribute column name in selected table
- * @param  {string[]} protectedColumns - Columns to be ignore for update statement. @example ['columnA', 'columnB']
- * @param  {string[]} cacheKeys - Redis key to be remove. @example {'keyTableA', 'keyTableB'}
+ * @param  {Object} data - Data to update. @example {columnName: 'newValue'}
+ * @param  {Array} protectedColumns - Columns to be ignore for update statement. @example ['columnA', 'columnB']
+ * @param  {Object} conditions - Query conditions
+ * @param  {Array} cacheKeys - Redis key to be remove. @example ['keyTableA', 'keyTableB']
  * @returns {Promise.<Object.<string, number|boolean|Object>>} - data result
  */
-exports.updateData = ({ table = '', data = {}, conditions = {}, attributeColumn = '', protectedColumns = [], cacheKeys = [] }) => {
+exports.updateData = ({ table = '', data = {}, protectedColumns = [], conditions = {} }) => {
     return new Promise(async (resolve, reject) => {
         let res = {
             total_data: 0,
             data: false
         }
-        let timeChar = ['CURRENT_TIMESTAMP()', 'NOW()']
-        let nullChar = ['NULL']
-        let setData = []
-        let queryData = ''
-        let setCond = []
-        let queryCond = ''
-        let query = `UPDATE ${table}`
-        const dataCustom = { ... data }
-        const customAttribute = { ... conditions }
+
+        if (_.isEmpty(table)) {
+            return resolve(res)
+        }
+
         const columns = await this.checkColumn({ table })
 
         // remove invalid column from data
         requestHelper.filterColumn(data, columns)
         // remove invalid data
         requestHelper.filterData(data)
-        
-        let customFields = []
-        let getCustomFields
-        let customDropdownFields
+        // remove invalid column from conditions
+        requestHelper.filterColumn(conditions, columns)
 
-        if (!_.isEmpty(attributeColumn)) {
-            getCustomFields = await this.checkCustomField({ table })
-            customFields = _.map(getCustomFields, 'field_key')
-            const getDropdownColumn = _.filter(getCustomFields, { 'field_type_id': 5 })
-            customDropdownFields = _.map(getDropdownColumn, 'field_key')
-            requestHelper.filterColumn(dataCustom, customFields)
-            requestHelper.filterColumn(customAttribute, customFields)
+        if (_.isEmpty(data) || !_.isPlainObject(data) || _.isEmpty(conditions) || !_.isPlainObject(conditions)) {
+            return resolve(res)
         }
 
-        if (_.isEmpty(conditions)) {
-            // reject('Update query is unsafe without data and condition')
-            if (_.isEmpty(data) && _.isEmpty(dataCustom)) {
-                return resolve(res)
-            }
+        let query = `UPDATE ${table}`
+        let queryData = []
+        let queryCondition = []
+        let timeChar = ['CURRENT_TIMESTAMP()', 'NOW()']
+        let nullChar = ['NULL']
+
+        const keys = Object.keys(data)
+        const forbiddenColumns = _.intersection(protectedColumns, keys)
+
+        if (!_.isEmpty(forbiddenColumns)) {
+            return resolve(res)
         }
 
-        if (!_.isEmpty(data)) {
-            const keys = Object.keys(data)
-            // check protected columns on submitted data
-            const forbiddenColumns = _.intersection(protectedColumns, keys)
+        for (let key in data) {
+            let val = _.trim(data[key])
 
-            if (!_.isEmpty(forbiddenColumns)) {
-                return resolve(res)
-            }
-            
-            delete data[attributeColumn]
-
-            for (key in data) {
-                let dataVal = _.trim(data[key])
-                
-                if (typeof data[key] !== undefined) {
-                    if (_.indexOf(timeChar, _.toUpper(dataVal)) >= 0) {
-                        dataVal = moment(new Date()).format('YYYY-MM-DD HH:mm:ss')
-                    }
-
-                    if (_.indexOf(nullChar, _.toUpper(dataVal)) >= 0) {
-                        dataVal = null
-                    }
-                } else {
-                    dataVal = null
+            if (typeof val !== undefined) {
+                if (_.indexOf(timeChar, _.toUpper(val)) >= 0) {
+                    val = moment(new Date()).format('YYYY-MM-DD HH:mm:ss')
                 }
 
-                if (_.isEmpty(dataVal) && dataVal !== 0) {
-                    setData.push(`${key} = NULL`)
-                } else {
-                    setData.push(`${key} = ${dbConn.escape(dataVal)}`)
+                if (_.indexOf(nullChar, _.toUpper(val)) >= 0) {
+                    val = null
                 }
+            } else {
+                dataVal = null
+            }
+
+            if (_.isEmpty(val) && val !== 0) {
+                queryData.push(`${key} = NULL`)
+            } else {
+                queryData.push(`${key} = ${dbConn.escape(val)}`)
             }
         }
 
-        if (!_.isEmpty(attributeColumn)) {
-            let setJsonData = []
-            
-            for (key in dataCustom) {
-                
-                if (customFields.indexOf(key) >= 0) {
-                    
-                    if (customDropdownFields.indexOf(key) >= 0) {
-                        let dropdownData = dataCustom[key].split('||')
-                        let dropdownId = dropdownData[0] || ''
-                        let dropdownValue = dropdownData[1] || ''
-
-                        if ((!isNaN(dropdownId) || _.isNumber(dropdownId)) && dropdownId > 0 && !_.isEmpty(dropdownValue)) {
-                            setJsonData.push(`'$.${key}', JSON_OBJECT('id', ${dbConn.escape(_.parseInt(dropdownId))}, 'value', ${dbConn.escape(dropdownValue)})`)
-                        }
-                    } else {
-                        setJsonData.push(`'$.${key}', ${dbConn.escape(dataCustom[key])}`)
-                    }
-                }
-            }
-
-            let joinData = _.join(setJsonData, ', ')
-
-            if (!_.isEmpty(joinData)) {
-                setData.push(`${attributeColumn} = JSON_SET(COALESCE(${attributeColumn}, '{}'), ${joinData})`)
-            }
-        }
-
-        queryData = _.join(setData, ', ')
+        queryData = _.join(queryData, ', ')
         query += ` SET ${queryData}`
 
-        if (!_.isEmpty(conditions)) {
-            for (key in conditions) {
-                if (_.isArray(conditions[key])) {
-                    setCond.push(`${key} IN (${_.trim(conditions[key].join(','))})`)
-                } else {
-                    setCond.push(`${key} = ${dbConn.escape(_.trim(conditions[key]))}`)
-                }
+        for (let key in conditions) {
+            let val = conditions[key]
+
+            if (_.isArray(val)) {
+                queryCondition.push(`${key} IN (${_.trim(val.join(','))})`)
+            } else {
+                queryCondition.push(`${key} = ${dbConn.escape(_.trim(val))}`)
             }
         }
 
-        if (!_.isEmpty(attributeColumn)) {
-            // for custom attributes
-            for (key in customAttribute) {
-                if (customFields.indexOf(key) >= 0) {
-                    let queryLine = `JSON_EXTRACT(${attributeColumn}, '$.${key}') = ${dbConn.escape(customAttribute[key])}`
-                    setCond.push(queryLine)
-                }
-            }
-        }
-        
-        queryCond = _.join(setCond, ' AND ')
-        query += ` WHERE ${queryCond}`
+        queryCondition = _.join(queryCondition, ' AND ')
+        query += ` WHERE ${queryCondition}`
         
         dbConn.query(query, (err, results, fields) => {
             if (err) {
@@ -1068,32 +808,39 @@ exports.updateData = ({ table = '', data = {}, conditions = {}, attributeColumn 
 /**
  * DELETE query
  * @param  {string} table - Table's name
- * @param  {Object.<string, string|number>} conditions - Query conditions
- * @param  {string[]} cacheKeys - Redis key to be remove. @example {'keyTableA', 'keyTableB'}
+ * @param  {Object} conditions - Query conditions
  * @returns {Promise.<Object.<string, number|boolean|Object>>} - data result
  */
-exports.deleteData = ({ table = '', conditions = {}, cacheKeys = [] }) => {
+exports.deleteData = ({ table = '', conditions = {} }) => {
     return new Promise(async (resolve, reject) => {
         let res = {
             total_data: 0,
             data: false
         }
-        let setCond = []
-        let queryCond = ''
-        let query = `DELETE FROM ${table}`
 
-        if (_.isEmpty(conditions)) {
-            // reject('Delete query is unsafe without condition')
+        if (_.isEmpty(table)) {
             return resolve(res)
         }
 
-        for (key in conditions) {
-            setCond.push(`${key} = ${dbConn.escape(conditions[key])}`)
+        const columns = await this.checkColumn({ table })
+
+        // remove invalid column from conditions
+        requestHelper.filterColumn(conditions, columns)
+
+        if (_.isEmpty(conditions) || !_.isPlainObject(conditions)) {
+            return resolve(res)
         }
 
-        queryCond = _.join(setCond, ' AND ')
+        let query = `DELETE FROM ${table}`
+        let queryCondition = []
 
-        query += ` WHERE ${queryCond}`
+        for (let key in conditions) {
+            let val = conditions[key]
+            queryCondition.push(`${key} = ${dbConn.escape(val)}`)
+        }
+
+        queryCondition = _.join(queryCondition, ' AND ')
+        query += ` WHERE ${queryCondition}`
 
         dbConn.query(query, (err, results, fields) => {
             if (err) {

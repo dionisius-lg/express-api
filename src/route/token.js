@@ -1,12 +1,14 @@
 const router = require('express').Router()
+const moment = require('moment-timezone')
 const bcrypt = require('bcrypt')
-const _ = require('lodash')
-const responseHelper = require('./../helper/response')
+const config = require('./../config')
 const validationMiddleware = require('./../middleware/validation')
+const responseHelper = require('./../helper/response')
 const authController = require('./../controller/auth')
 const usersController = require('./../controller/users')
 const authSchema = require('./../schema/auth')
-const usersSchema = require('./../schema/users')
+
+moment.tz.setDefault(config.timezone)
 
 router.post('/', validationMiddleware(authSchema.token, 'body'), async (req, res) => {
     const { body, socket, headers } = req

@@ -44,12 +44,11 @@ exports.createToken = (data = { id: '', ip_address: '', user_agent: '' }) => {
             const dataRegister = [
                 { 
                     user_id: data.id, 
-                    token: data.token, 
-                    ip_address: data.ip_address,
                     user_agent: _.replace(data.user_agent, ' ', ''),
-                    is_active: 1, 
+                    ip_address: data.ip_address,
+                    token: data.token,
                     expired: data.token_expires_in,
-                    updated: moment(new Date()).format('YYYY-MM-DD HH:mm:ss')
+                    updated: moment(new Date()).format('YYYY-MM-DD HH:mm:ss'),
                 }
             ]
 

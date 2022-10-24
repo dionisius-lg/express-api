@@ -1,25 +1,24 @@
 const router = require('express').Router()
 const moment = require('moment-timezone')
-const bcrypt = require('bcrypt')
 const config = require('./../config')
 const validationMiddleware = require('./../middleware/validation')
 const responseHelper = require('./../helper/response')
-const usersController = require('./../controller/users')
-const usersSchema = require('./../schema/users')
+const productsController = require('./../controller/products')
+const productsSchema = require('./../schema/products')
 
 moment.tz.setDefault(config.timezone)
 
 router.get('/', async (req, res, next) => {
     const { query } = req
-    const result = await usersController.getAll(query)
+    const result = await productsController.getAll(query)
 
     return responseHelper.sendSuccessData(res, result)
 })
 
-router.get('/:id', validationMiddleware(usersSchema.detail, 'params'), async (req, res, next) => {
+router.get('/:id', validationMiddleware(productsSchema.detail, 'params'), async (req, res, next) => {
     const { params } = req
     const conditions = { id: params.id }
-    const result = await usersController.getDetail(conditions)
+    const result = await productsController.getDetail(conditions)
 
     if (result.data === false) {
         return responseHelper.sendNotFoundData(res, result)
@@ -28,7 +27,7 @@ router.get('/:id', validationMiddleware(usersSchema.detail, 'params'), async (re
     return responseHelper.sendSuccessData(res, result)
 })
 
-router.post('/', validationMiddleware(usersSchema.create, 'body'), async (req, res, next) => {
+router.post('/', validationMiddleware(productsSchema.create, 'body'), async (req, res, next) => {
     const { body, decoded } = req
 
     if (typeof body.created_date === 'undefined') {
@@ -39,13 +38,7 @@ router.post('/', validationMiddleware(usersSchema.create, 'body'), async (req, r
         body.created_user_id = decoded.id
     }
 
-    if (typeof body.password !== 'undefined') {
-        body.password = bcrypt.hashSync(body.password, 10)
-    } else {
-        body.password = bcrypt.hashSync(body.username, 10)
-    }
-
-    const result = await usersController.insertData(body)
+    const result = await productsController.insertData(body)
 
     if (result.data === false) {
         return responseHelper.sendBadRequest(res, 'Invalid Data')
@@ -54,7 +47,7 @@ router.post('/', validationMiddleware(usersSchema.create, 'body'), async (req, r
     return responseHelper.sendSuccessData(res, result, 201)
 })
 
-router.put('/:id', validationMiddleware(usersSchema.update, 'body'), async (req, res, next) => {
+router.put('/:id', validationMiddleware(productsSchema.update, 'body'), async (req, res, next) => {
     const { params, body, decoded } = req
 
     if (typeof body.updated_date === 'undefined') {
@@ -65,12 +58,8 @@ router.put('/:id', validationMiddleware(usersSchema.update, 'body'), async (req,
         body.updated_user_id = decoded.id
     }
 
-    if (typeof body.password !== 'undefined') {
-        body.password = bcrypt.hashSync(body.password, 10)
-    }
-
     const conditions = { id: params.id }
-    const result = await usersController.updateData(body, conditions)
+    const result = await productsController.updateData(body, conditions)
 
     if (result.data === false) {
         return responseHelper.sendBadRequest(res, 'Invalid Data')
@@ -80,10 +69,10 @@ router.put('/:id', validationMiddleware(usersSchema.update, 'body'), async (req,
     return responseHelper.sendSuccessData(res, result)
 })
 
-router.delete('/:id', validationMiddleware(usersSchema.detail, 'params'), async (req, res, next) => {
+router.delete('/:id', validationMiddleware(productsSchema.detail, 'params'), async (req, res, next) => {
     const { params } = req
     const conditions = { id: params.id }
-    const result = await usersController.deleteData(conditions)
+    const result = await productsController.deleteData(conditions)
 
     if (result.data === false) {
         return responseHelper.sendBadRequest(res, 'Invalid Data')

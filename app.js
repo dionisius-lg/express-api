@@ -14,7 +14,7 @@ app.use(cors({
     methods: 'GET,POST,PUT,DELETE',
     preflightContinue: false,
     optionsSuccessStatus: 204 // some legacy browsers (IE11, various SmartTVs) choke on 204
-}))
+}));
 
 // define all router
 app.use(router);

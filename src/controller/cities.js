@@ -1,10 +1,10 @@
 const dbQueryHelper = require('./../helper/db_query')
-const table = 'users'
+const table = 'cities'
 
 
 exports.getAll = async (conditions) => {
     const conditionTypes = {
-        'like': ['username', 'fullname', 'email'],
+        'like': ['name'],
         'date': []
     }
 
@@ -14,28 +14,24 @@ exports.getAll = async (conditions) => {
         customConditions.push(`${table}.id <> '${conditions.idx}'`)
     }
 
+    if (typeof conditions.province !== 'undefined') {
+        customConditions.push(`provinces.name LIKE '%${conditions.province}%'`)
+    }
+
     const columnSelect = [
 
     ]
 
     const columnDeselect = [
-        'password'
+        
     ]
 
     const customColumns = [
-        `cities.name AS city`,
         `provinces.name AS province`,
-        `user_levels.name AS user_level`,
-        `created_users.fullname AS created_user`,
-        `updated_users.fullname AS updated_user`,
     ]
 
     const join = [
-        `LEFT JOIN cities ON cities.id = ${table}.city_id`,
         `LEFT JOIN provinces ON provinces.id = ${table}.province_id`,
-        `LEFT JOIN user_levels ON user_levels.id = ${table}.user_level_id`,
-        `LEFT JOIN users AS created_users ON created_users.id = ${table}.created_user_id`,
-        `LEFT JOIN users AS updated_users ON updated_users.id = ${table}.updated_user_id`,
     ]
 
     const groupBy = [
@@ -60,24 +56,14 @@ exports.getDetail = async (conditions) => {
 
     const columnSelect = []
 
-    const columnDeselect = [
-        'password'
-    ]
+    const columnDeselect = []
 
     const customColumns = [
-        `cities.name AS city`,
         `provinces.name AS province`,
-        `user_levels.name AS user_level`,
-        `created_users.fullname AS created_user`,
-        `updated_users.fullname AS updated_user`,
     ]
 
     const join = [
-        `LEFT JOIN cities ON cities.id = ${table}.city_id`,
         `LEFT JOIN provinces ON provinces.id = ${table}.province_id`,
-        `LEFT JOIN user_levels ON user_levels.id = ${table}.user_level_id`,
-        `LEFT JOIN users AS created_users ON created_users.id = ${table}.created_user_id`,
-        `LEFT JOIN users AS updated_users ON updated_users.id = ${table}.updated_user_id`,
     ]
 
     const data = await dbQueryHelper.getDetail({ table, conditions, customConditions, columnSelect, columnDeselect, customColumns, join })
