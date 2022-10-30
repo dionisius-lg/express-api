@@ -61,7 +61,7 @@ exports.getDetail = async (conditions) => {
     const columnSelect = []
 
     const columnDeselect = [
-        'password'
+        // 'password'
     ]
 
     const customColumns = [

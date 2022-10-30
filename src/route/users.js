@@ -25,6 +25,10 @@ router.get('/:id', validationMiddleware(usersSchema.detail, 'params'), async (re
         return responseHelper.sendNotFoundData(res, result)
     }
 
+    if (result.data.hasOwnProperty('password')) {
+        delete result.data.password
+    }
+
     return responseHelper.sendSuccessData(res, result)
 })
 
