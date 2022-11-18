@@ -39,7 +39,7 @@ The response you get in the form of a json object are:<br />
 `response_code` is response status code<br />
 `success` is a status of the success of the request, `true` or `false`<br />
 `total_data` is the number of response data obtained<br />
-`data` is the result data, contains array of object data. The number of data is limited to a maximum of 20 data<br />
+`data` is the result data, contains array of object data. By default, the number of data is limited to a maximum of 20 data<br />
 `paging` is pagination info, contains: current, next, previous, first, last. It can be helpful to create pagination on Frontend App<br />
 
 ### Get Detail of Data
@@ -51,7 +51,7 @@ The response you get in the form of a json object are:<br />
 `response_code` is response status code<br />
 `success` is a status of the success of the request, `true` or `false`<br />
 `total_data` is the number of response data obtained<br />
-`data` is the result data, contains object row of data. The number of data is limited to a maximum of 20 data<br />
+`data` is the result data, contains object row of data<br />
 
 ### Create New Data
 
