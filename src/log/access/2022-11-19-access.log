@@ -1,0 +1,3 @@
+::1 - [19/Nov/2022:01:07:39 +0700] 404 [secret=-] "POST /token HTTP/1.1" {"username":"mario","password":"mario"} 234.168 ms - 110 
+::1 - [19/Nov/2022:01:08:04 +0700] 200 [secret=-] "POST /token HTTP/1.1" {"username":"dion","password":"dion"} 516.971 ms - 877 
+::1 - [19/Nov/2022:01:08:47 +0700] 200 [secret=-] "GET /users HTTP/1.1" {} 51.836 ms - 684 

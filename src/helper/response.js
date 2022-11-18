@@ -30,7 +30,7 @@ exports.sendSuccessData = function (res, data, code = false) {
         result.paging = {
             current: page_current,
             next: (page_next <= page_last) ? page_next : page_current,
-            previuos: (page_previous > 0) ? page_previous : 1,
+            previous: (page_previous > 0) ? page_previous : 1,
             first: page_first,
             last: (page_last > 0) ? page_last : 1
         }
