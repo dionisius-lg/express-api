@@ -8,3 +8,6 @@ package-lock.json
 
 # local environment
 .env
+
+# log
+/src/log

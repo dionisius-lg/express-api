@@ -2,7 +2,6 @@ const _ = require('lodash')
 const jwt = require('jsonwebtoken')
 const jwtConfig = require('./../config').jwt
 const responseHelper = require('./../helper/response')
-const { addListener } = require('../config/database')
 
 /**
  * authenticate JWT token
